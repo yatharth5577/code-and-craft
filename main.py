@@ -1,4 +1,75 @@
-OpenCV    try:
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+from bson import ObjectId
+import json
+import os
+
+load_dotenv()
+
+app = FastAPI(
+    title="AssistFlow Backend",
+    description="Backend API for AssistFlow AAC & Caregiver Assistance System",
+    version="1.3.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://express-assist-flow.lovable.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "*",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve Frontend Static Directory
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+
+client = AsyncIOMotorClient(os.getenv("MONGO_URI"))
+db = client[os.getenv("DB_NAME", "assist_flow")]
+cards_collection = db["cards"]
+requests_collection = db["requests"]
+profiles_collection = db["profiles"]
+
+# --- WebSocket Manager for Real-Time Live Updates ---
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, event_type: str, payload: dict):
+        message = json.dumps({"event": event_type, "data": payload})
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_text(message)
+            except Exception:
+                self.disconnect(connection)
+
+manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
         while True:
             data = await websocket.receive_text()
             if data == "ping":
@@ -42,6 +113,12 @@ class StatusUpdate(BaseModel):
     resolved_by: Optional[str] = "Caregiver"
     notes: Optional[str] = None
 
+class BatchResolveRequest(BaseModel):
+    request_ids: List[str]
+    status: str = "Completed"
+    resolved_by: Optional[str] = "Caregiver"
+    notes: Optional[str] = None
+
 class PatientProfile(BaseModel):
     name: str
     room_number: str
@@ -55,13 +132,13 @@ class PatientProfile(BaseModel):
 async def serve_home():
     if os.path.exists("static/index.html"):
         return FileResponse("static/index.html")
-    return {"status": "backend is running", "version": "1.2.0"}
+    return {"status": "backend is running", "version": "1.3.0"}
 
 @app.get("/api/status")
 async def root():
     return {
         "status": "backend is running",
-        "version": "1.2.0",
+        "version": "1.3.0",
         "active_ws_clients": len(manager.active_connections)
     }
 
@@ -241,6 +318,43 @@ async def update_request_status(request_id: str, update: StatusUpdate):
         }
     })
     return {"updated": True, "id": request_id, "status": status_val}
+
+# --- Caregiver Batch Resolution Endpoint ---
+@app.post("/requests/batch-resolve")
+async def batch_resolve_requests(batch: BatchResolveRequest):
+    oids = []
+    for rid in batch.request_ids:
+        try:
+            oids.append(ObjectId(rid))
+        except Exception:
+            pass
+    
+    if not oids:
+        raise HTTPException(status_code=400, detail="No valid request IDs provided")
+    
+    status_val = batch.status or "Completed"
+    update_fields = {
+        "status": status_val,
+        "resolved_at": datetime.utcnow(),
+        "resolved_by": batch.resolved_by or "Caregiver"
+    }
+    if batch.notes:
+        update_fields["notes"] = batch.notes
+
+    result = await requests_collection.update_many(
+        {"_id": {"$in": oids}},
+        {"$set": update_fields}
+    )
+    
+    # Broadcast batch update event via WebSockets
+    await manager.broadcast("requests_batch_resolved", {
+        "ids": batch.request_ids,
+        "status": status_val,
+        "count": result.modified_count,
+        "details": update_fields
+    })
+    
+    return {"modified_count": result.modified_count, "updated": True}
 
 @app.delete("/requests/all-dev-clear")
 async def clear_all_requests():
