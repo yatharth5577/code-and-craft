@@ -50,6 +50,1503 @@
             AssistFlow
             <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20">AI Vision Pro</span>
           </h1>
+          <p class="text-xs text-slate-400">Gesture Recognition & AAC Communicator</p>
+        </div>
+      </div>
+
+      <!-- View Selector Tabs -->
+      <nav class="flex items-center bg-slate-950/60 p-1.5 rounded-xl border border-slate-800">
+        <button onclick="switchView('patient')" id="tab-patient" class="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all bg-teal-500 text-slate-950 shadow-md">
+          <i data-lucide="hand" class="w-4 h-4"></i>
+          Patient & Gestures
+        </button>
+        <button onclick="switchView('caregiver')" id="tab-caregiver" class="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all relative">
+          <i data-lucide="activity" class="w-4 h-4"></i>
+          Caregiver
+          <span id="pending-badge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center">0</span>
+        </button>
+        <button onclick="switchView('analytics')" id="tab-analytics" class="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all">
+          <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+          Analytics
+        </button>
+      </nav>
+
+      <!-- Connection Status Indicator -->
+      <div class="hidden sm:flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-slate-950 border border-slate-800">
+        <span id="ws-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+        <span id="ws-text" class="text-slate-400 font-medium">Connecting...</span>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Notification Banner (Toast) -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <div class="bg-slate-900 border border-teal-500/30 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-xl">
+      <div id="toast-icon" class="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center">
+        <i data-lucide="check-circle" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <p id="toast-title" class="text-sm font-bold text-white">Message Sent</p>
+        <p id="toast-msg" class="text-xs text-slate-400">Notified caregiver station</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ========================================== -->
+    <!-- VIEW 1: PATIENT COMMUNICATOR + AI VISION   -->
+    <!-- ========================================== -->
+    <section id="view-patient" class="space-y-6">
+      
+      <!-- AI Gesture & Sign Language Camera Panel -->
+      <div class="bg-slate-900/90 border border-teal-500/30 rounded-3xl p-6 shadow-2xl backdrop-blur-xl space-y-4">
+        
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <div class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-teal-400 bg-teal-500/10 px-3 py-1 rounded-full border border-teal-500/20">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+              OpenCV / MediaPipe AI Hand Vision
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-white mt-1">Touch-Free Computer Vision Communicator</h2>
+            <p class="text-xs text-slate-400">Perform hand signs in front of the camera to speak, send requests, or cancel false alarms hands-free.</p>
+          </div>
+
+          <!-- Camera Toggle Switch -->
+          <div class="flex items-center gap-3 bg-slate-950 p-2 rounded-2xl border border-slate-800">
+            <span class="text-xs font-semibold text-slate-300" id="cam-status-label">Camera Off</span>
+            <button onclick="toggleCamera()" id="btn-toggle-cam" class="px-4 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-teal-500/20 transition-all">
+              <i data-lucide="video" class="w-4 h-4"></i>
+              Enable Gesture Vision
+            </button>
+          </div>
+        </div>
+
+        <!-- Vision Interface Area -->
+        <div id="vision-container" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+          
+          <!-- Live Camera Feed Box -->
+          <div class="lg:col-span-2 relative bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 aspect-video flex items-center justify-center">
+            <video id="webcam-video" class="hidden" autoplay playsinline></video>
+            <canvas id="landmark-canvas" class="w-full h-full object-cover mirror-mode"></canvas>
+            
+            <div class="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
+              <div class="px-3 py-1.5 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-semibold text-teal-300 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <span>21-Point Skeletal Tracking</span>
+              </div>
+              <div id="gesture-detected-tag" class="px-3 py-1.5 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-slate-400">
+                Show hand sign in frame...
+              </div>
+            </div>
+
+            <!-- Dwell Confirmation Meter -->
+            <div class="absolute bottom-4 left-4 right-4 bg-slate-950/90 backdrop-blur-md p-3 rounded-xl border border-slate-800 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-300 flex items-center justify-center font-bold text-xl" id="meter-icon">
+                ✋
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex justify-between text-xs font-bold mb-1">
+                  <span id="active-gesture-title" class="text-white truncate">Hold sign to confirm</span>
+                  <span id="dwell-percentage" class="text-teal-400">0%</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                  <div id="dwell-progress-bar" class="bg-gradient-to-r from-teal-500 to-cyan-400 h-full rounded-full transition-all duration-75" style="width: 0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Extended Gesture Dictionary & Guide -->
+          <div class="bg-slate-950/80 rounded-2xl p-4 border border-slate-800 space-y-3 flex flex-col justify-between max-h-[380px] overflow-y-auto">
+            <div>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-teal-400 flex items-center gap-2">
+                <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                Gesture Dictionary
+              </h3>
+              <p class="text-[11px] text-slate-400 mt-1">
+                Make any of the signs below in front of the camera:
+              </p>
+            </div>
+
+            <div class="space-y-1.5 text-xs">
+              <div class="flex items-center justify-between p-2 rounded-xl bg-emerald-950/30 border border-emerald-500/30">
+                <span class="font-bold text-emerald-300">🫳 Palm Down (Push)</span>
+                <span class="text-emerald-400 font-bold">Cancel All / I'm Okay</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">☝️ 1 Finger (Index)</span>
+                <span class="text-teal-400 font-semibold">Water / Thirsty</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">✌️ Peace (2 Fingers)</span>
+                <span class="text-cyan-400 font-semibold">Call Nurse</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">🤟 3 Fingers Spread</span>
+                <span class="text-blue-400 font-semibold">Cold / Blanket</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">🖖 4 Fingers Up</span>
+                <span class="text-rose-400 font-semibold">Short of Breath</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">🖐️ 5 Fingers (Palm)</span>
+                <span class="text-amber-400 font-semibold">Hot / Temperature</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">👍 Thumbs Up</span>
+                <span class="text-emerald-400 font-semibold">Yes / Agree</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">👎 Thumbs Down</span>
+                <span class="text-red-400 font-semibold">In Pain / No</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">👌 OK Sign (Pinch+3)</span>
+                <span class="text-teal-400 font-semibold">Medicine</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">🤏 Pinch (Thumb+Index)</span>
+                <span class="text-amber-300 font-semibold">Hungry / Food</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">🤞 Crossed Fingers</span>
+                <span class="text-purple-400 font-semibold">Bathroom</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">🤙 Shaka / Phone</span>
+                <span class="text-cyan-300 font-semibold">Call Family</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">🤟 ASL Love Sign</span>
+                <span class="text-pink-400 font-semibold">Thank You</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">🤘 Horns (Index+Pinky)</span>
+                <span class="text-indigo-400 font-semibold">Quiet Time</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <span class="font-bold text-white">👆 L-Shape (Thumb+Index)</span>
+                <span class="text-teal-300 font-semibold">Adjust Bed</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-xl bg-red-950/40 border border-red-500/30">
+                <span class="font-bold text-red-300">✊ Closed Fist (Hold)</span>
+                <span class="text-red-400 font-bold">EMERGENCY SOS</span>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Emergency SOS & Cancel All Quick Bar -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        <!-- Emergency SOS Button (2 Cols) -->
+        <div class="md:col-span-2 bg-gradient-to-r from-red-950/40 via-red-900/20 to-slate-900 border border-red-500/30 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-2xl">
+          <div class="space-y-1 text-center sm:text-left">
+            <div class="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-red-400 bg-red-500/10 px-2.5 py-0.5 rounded-full border border-red-500/20">
+              <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+              Immediate Medical Help
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-white">Need Emergency Help?</h2>
+            <p class="text-xs text-slate-400">Press button or hold <strong>Closed Fist ✊</strong></p>
+          </div>
+
+          <button onclick="triggerEmergency('Emergency Button')" class="pulse-emergency w-full sm:w-auto px-6 py-4 rounded-2xl bg-gradient-to-r from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white font-extrabold text-base flex items-center justify-center gap-2.5 transition-transform active:scale-95 shadow-xl shadow-red-600/30">
+            <i data-lucide="siren" class="w-6 h-6"></i>
+            URGENT SOS (✊ FIST)
+          </button>
+        </div>
+
+        <!-- Cancel All / I'm Okay Button (1 Col) -->
+        <div class="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-3xl p-5 sm:p-6 flex flex-col justify-between gap-4 shadow-xl">
+          <div>
+            <div class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 mb-1">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+              False Alarm / All Good
+            </div>
+            <h3 class="text-lg font-bold text-white">Cancel All Requests</h3>
+            <p class="text-xs text-slate-400">Clear queue & dismiss nurse alarm (or sign <strong>🫳 Palm Down</strong>)</p>
+          </div>
+
+          <button onclick="cancelAllRequests()" class="w-full px-4 py-3 rounded-2xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 font-bold text-xs flex items-center justify-center gap-2 border border-emerald-500/30 transition-all shadow-md active:scale-95">
+            <i data-lucide="x-circle" class="w-4 h-4"></i>
+            Cancel All Requests / I'm Okay (🫳)
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Category Filter Pills -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+        <button onclick="filterCategory('All')" class="cat-pill active px-4 py-2 rounded-xl text-xs font-bold border transition-all bg-teal-500/20 border-teal-500/40 text-teal-300">
+          All Cards (17)
+        </button>
+        <button onclick="filterCategory('Basic Needs')" class="cat-pill px-4 py-2 rounded-xl text-xs font-bold border transition-all bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700">
+          🍲 Basic Needs
+        </button>
+        <button onclick="filterCategory('Pain & Care')" class="cat-pill px-4 py-2 rounded-xl text-xs font-bold border transition-all bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700">
+          ❤️‍🩹 Pain & Care
+        </button>
+        <button onclick="filterCategory('Comfort')" class="cat-pill px-4 py-2 rounded-xl text-xs font-bold border transition-all bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700">
+          🛋️ Comfort
+        </button>
+        <button onclick="filterCategory('Responses')" class="cat-pill px-4 py-2 rounded-xl text-xs font-bold border transition-all bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700">
+          💬 Responses
+        </button>
+        <button onclick="filterCategory('Social')" class="cat-pill px-4 py-2 rounded-xl text-xs font-bold border transition-all bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700">
+          👥 Social
+        </button>
+      </div>
+
+      <!-- Phrase Tiles Grid with Dynamic Gesture Badges -->
+      <div id="cards-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div class="col-span-full py-16 text-center text-slate-500">
+          <i data-lucide="loader-2" class="w-8 h-8 animate-spin mx-auto mb-2 text-teal-500"></i>
+          Loading communication cards and gesture mappings...
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VIEW 2: CAREGIVER LIVE STATION             -->
+    <!-- ========================================== -->
+    <section id="view-caregiver" class="hidden space-y-6">
+      
+      <!-- Top Stats & Filter Bar -->
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+        <div>
+          <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            <i data-lucide="radio" class="w-5 h-5 text-teal-400"></i>
+            Live Patient Request Feed
+          </h2>
+          <p class="text-xs text-slate-400">Real-time WebSocket alerts (Touch Grid & AI Vision Gestures)</p>
+        </div>
+
+        <div class="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+          <button onclick="filterRequests('Pending')" id="req-filter-pending" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-teal-500 text-slate-950">
+            Pending
+          </button>
+          <button onclick="filterRequests('Completed')" id="req-filter-completed" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white">
+            Resolved
+          </button>
+          <button onclick="filterRequests('All')" id="req-filter-all" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white">
+            All
+          </button>
+          <button onclick="fetchRequests()" class="p-1.5 text-slate-400 hover:text-teal-400 transition-colors title='Refresh'">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Emergency Active Banner -->
+      <div id="active-emergency-box" class="hidden p-4 rounded-2xl bg-red-950/60 border border-red-500/40 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-red-500 text-white flex items-center justify-center animate-bounce">
+            <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-red-300">ACTIVE EMERGENCY ALERT TRIGGERED</h4>
+            <p id="emergency-details" class="text-xs text-red-200/80">Room 101 requested immediate assistance</p>
+          </div>
+        </div>
+        <button onclick="dismissEmergencyBanner()" class="px-3 py-1.5 rounded-xl bg-red-500/20 text-red-300 hover:bg-red-500/30 text-xs font-bold">
+          Acknowledge
+        </button>
+      </div>
+
+      <!-- Batch Selection Action Bar -->
+      <div id="batch-action-bar" class="p-3 bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+        
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-300 select-none">
+            <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll(this.checked)" class="w-4 h-4 rounded text-teal-500 bg-slate-950 border-slate-700 focus:ring-teal-500">
+            <span>Select All Visible (<span id="visible-pending-count">0</span>)</span>
+          </label>
+          <span id="selected-count-badge" class="hidden px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+            0 selected
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="clearSelection()" id="btn-clear-selection" class="hidden px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-all">
+            Clear Selection
+          </button>
+          <button onclick="openBatchResolveModal()" id="btn-batch-resolve" disabled class="px-4 py-2 rounded-xl bg-emerald-500/30 text-slate-400 font-bold text-xs flex items-center gap-2 transition-all cursor-not-allowed">
+            <i data-lucide="check-check" class="w-4 h-4"></i>
+            Resolve Selected (0)
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Requests Queue List -->
+      <div id="requests-list" class="space-y-3">
+        <div class="py-12 text-center text-slate-500">
+          <i data-lucide="loader-2" class="w-6 h-6 animate-spin mx-auto mb-2 text-teal-500"></i>
+          Loading patient request history...
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VIEW 3: ANALYTICS & STATS                  -->
+    <!-- ========================================== -->
+    <section id="view-analytics" class="hidden space-y-6">
+      
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-bold text-white">Caregiver Analytics & Response Insights</h2>
+          <p class="text-xs text-slate-400">Aggregated communication stats from MongoDB database</p>
+        </div>
+        <button onclick="fetchAnalytics()" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:border-teal-500/40 transition-all">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+          Refresh Stats
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-2xl space-y-2">
+          <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+            <span>Total Requests</span>
+            <i data-lucide="inbox" class="w-4 h-4 text-teal-400"></i>
+          </div>
+          <p id="stat-total" class="text-3xl font-extrabold text-white">0</p>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-2xl space-y-2">
+          <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+            <span>Pending Assistance</span>
+            <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
+          </div>
+          <p id="stat-pending" class="text-3xl font-extrabold text-amber-400">0</p>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-2xl space-y-2">
+          <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+            <span>Completed / Resolved</span>
+            <i data-lucide="check-check" class="w-4 h-4 text-emerald-400"></i>
+          </div>
+          <p id="stat-completed" class="text-3xl font-extrabold text-emerald-400">0</p>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-2xl space-y-2">
+          <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+            <span>Urgent / SOS Calls</span>
+            <i data-lucide="siren" class="w-4 h-4 text-red-400"></i>
+          </div>
+          <p id="stat-urgent" class="text-3xl font-extrabold text-red-400">0</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-slate-900/60 border border-slate-800 p-6 rounded-2xl space-y-4">
+          <h3 class="text-sm font-bold text-slate-200">Category Distribution</h3>
+          <div id="category-bars" class="space-y-3">
+            <p class="text-xs text-slate-500">Loading metrics...</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-800 p-6 rounded-2xl space-y-4">
+          <h3 class="text-sm font-bold text-slate-200">Priority Level Breakdown</h3>
+          <div id="priority-bars" class="space-y-3">
+            <p class="text-xs text-slate-500">Loading metrics...</p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Single Resolve Modal Dialog -->
+  <div id="resolve-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 space-y-5 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i data-lucide="check-circle" class="w-5 h-5 text-teal-400"></i>
+          Resolve Patient Request
+        </h3>
+        <button onclick="closeResolveModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Caregiver Name / ID</label>
+          <input type="text" id="caregiver-name" value="Nurse Station" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-teal-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Resolution Notes</label>
+          <textarea id="caregiver-notes" placeholder="e.g. Responded to sign gesture, checked patient comfort." rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-teal-500"></textarea>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <button onclick="closeResolveModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white">
+          Cancel
+        </button>
+        <button onclick="confirmResolve()" class="px-5 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-teal-500/20">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          Mark as Resolved
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch Resolve Confirmation Modal -->
+  <div id="batch-resolve-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 space-y-5 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i data-lucide="check-check" class="w-5 h-5 text-emerald-400"></i>
+          Batch Resolve Requests
+        </h3>
+        <button onclick="closeBatchResolveModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-300">
+        You are resolving <strong id="batch-modal-count" class="font-extrabold text-white">0</strong> selected patient requests simultaneously.
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Caregiver Name / Station</label>
+          <input type="text" id="batch-caregiver-name" value="Nurse Station" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-teal-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Batch Resolution Note (Optional)</label>
+          <textarea id="batch-caregiver-notes" placeholder="e.g. Ward rounds completed. All selected needs addressed." rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-teal-500"></textarea>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <button onclick="closeBatchResolveModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white">
+          Cancel
+        </button>
+        <button onclick="confirmBatchResolve()" class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20">
+          <i data-lucide="check-check" class="w-4 h-4"></i>
+          Resolve All Selected
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Application & AI Vision Logic -->
+  <script>
+    const API_BASE = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+      ? 'https://assist-flow-backend.onrender.com'
+      : window.location.origin;
+
+    const WS_BASE = API_BASE.replace(/^http/, 'ws') + '/ws';
+
+    // Comprehensive 20-Gesture Mapping Dictionary
+    const CARD_GESTURE_MAP = {
+      // Basic Needs
+      "Water / Thirsty": { gestureId: "point_up", icon: "☝️", signName: "1 Finger (Index Up)" },
+      "Water": { gestureId: "point_up", icon: "☝️", signName: "1 Finger (Index Up)" },
+      "Hungry": { gestureId: "pinch_hand", icon: "🤏", signName: "Pinch (Thumb+Index)" },
+      "Bathroom": { gestureId: "crossed_two", icon: "🤞", signName: "Crossed Fingers" },
+      "Tired": { gestureId: "point_down", icon: "👇", signName: "Point Down" },
+
+      // Pain & Care
+      "Call Nurse": { gestureId: "peace_sign", icon: "✌️", signName: "2 Fingers (Peace)" },
+      "In Pain": { gestureId: "thumbs_down", icon: "👎", signName: "Thumbs Down" },
+      "Medicine": { gestureId: "ok_sign", icon: "👌", signName: "OK Sign (Circle+3)" },
+      "Shortness of Breath": { gestureId: "four_fingers", icon: "🖖", signName: "4 Fingers Up" },
+
+      // Comfort
+      "Cold": { gestureId: "three_fingers", icon: "🤟", signName: "3 Fingers (Cold)" },
+      "Hot": { gestureId: "open_palm", icon: "🖐️", signName: "5 Fingers (Open Palm)" },
+      "Adjust Bed": { gestureId: "l_shape", icon: "👆", signName: "L-Shape (Thumb+Index)" },
+      "Quiet Time": { gestureId: "horns_sign", icon: "🤘", signName: "Horns / Rock On" },
+
+      // Responses & System Actions
+      "Yes": { gestureId: "thumbs_up", icon: "👍", signName: "Thumbs Up" },
+      "No": { gestureId: "flat_sideway", icon: "👉", signName: "Point Right (No)" },
+      "Thank You": { gestureId: "asl_ily", icon: "🤟", signName: "ASL Love Sign" },
+      "Call Family": { gestureId: "shaka_call", icon: "🤙", signName: "Shaka (Call Sign)" },
+      "Cancel All / I'm Okay": { gestureId: "palm_down", icon: "🫳", signName: "Palm Down (Push)" }
+    };
+
+    let allCards = [];
+    let allRequests = [];
+    let activeRequestFilter = 'Pending';
+    let activeCardCategory = 'All';
+    let resolvingRequestId = null;
+    let selectedRequestIds = new Set();
+    let ws = null;
+
+    // Camera & MediaPipe State
+    let isCameraActive = false;
+    let cameraInstance = null;
+    let handsDetector = null;
+    let currentDetectedGesture = null;
+    let gestureStartTime = null;
+    const GESTURE_DWELL_MS = 1200; // 1.2s dwell confirmation
+    let lastDispatchTimestamp = 0;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      fetchCards();
+      fetchRequests();
+      fetchAnalytics();
+      initWebSocket();
+    });
+
+    // --- Tab Switching ---
+    function switchView(viewName) {
+      document.getElementById('view-patient').classList.add('hidden');
+      document.getElementById('view-caregiver').classList.add('hidden');
+      document.getElementById('view-analytics').classList.add('hidden');
+
+      const tabs = ['patient', 'caregiver', 'analytics'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        btn.className = 'flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all';
+      });
+
+      document.getElementById(`view-${viewName}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tab-${viewName}`);
+      activeBtn.className = 'flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold bg-teal-500 text-slate-950 shadow-md';
+
+      if (viewName === 'caregiver') fetchRequests();
+      if (viewName === 'analytics') fetchAnalytics();
+      lucide.createIcons();
+    }
+
+    // --- MediaPipe / OpenCV AI Hand Gesture Recognition Engine ---
+    async function toggleCamera() {
+      const container = document.getElementById('vision-container');
+      const btn = document.getElementById('btn-toggle-cam');
+      const status = document.getElementById('cam-status-label');
+
+      if (isCameraActive) {
+        if (cameraInstance) {
+          cameraInstance.stop();
+        }
+        isCameraActive = false;
+        container.classList.add('hidden');
+        btn.innerHTML = `<i data-lucide="video" class="w-4 h-4"></i> Enable Gesture Vision`;
+        btn.className = 'px-4 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-teal-500/20 transition-all';
+        status.innerText = 'Camera Off';
+        lucide.createIcons();
+      } else {
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Initializing Vision AI...`;
+        container.classList.remove('hidden');
+        lucide.createIcons();
+
+        try {
+          await initHandTracking();
+          isCameraActive = true;
+          btn.innerHTML = `<i data-lucide="video-off" class="w-4 h-4"></i> Disable Camera`;
+          btn.className = 'px-4 py-2 rounded-xl bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/30 font-bold text-xs flex items-center gap-2 transition-all';
+          status.innerText = 'AI Vision Tracking: ON';
+          lucide.createIcons();
+        } catch (e) {
+          console.error("Camera Init Error:", e);
+          alert("Could not access webcam. Please allow camera permissions in your browser.");
+          btn.innerHTML = `<i data-lucide="video" class="w-4 h-4"></i> Retry Camera`;
+          lucide.createIcons();
+        }
+      }
+    }
+
+    async function initHandTracking() {
+      const videoElement = document.getElementById('webcam-video');
+      const canvasElement = document.getElementById('landmark-canvas');
+      const canvasCtx = canvasElement.getContext('2d');
+
+      handsDetector = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      });
+
+      handsDetector.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.65,
+        minTrackingConfidence: 0.65
+      });
+
+      handsDetector.onResults((results) => {
+        canvasElement.width = videoElement.videoWidth || 640;
+        canvasElement.height = videoElement.videoHeight || 480;
+
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          const landmarks = results.multiHandLandmarks[0];
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#14b8a6', lineWidth: 3 });
+          drawLandmarks(canvasCtx, landmarks, { color: '#38bdf8', lineWidth: 1, radius: 4 });
+
+          const gesture = classifyHandGesture(landmarks);
+          handleRecognizedGesture(gesture);
+        } else {
+          handleRecognizedGesture(null);
+        }
+
+        canvasCtx.restore();
+      });
+
+      cameraInstance = new Camera(videoElement, {
+        onFrame: async () => {
+          if (isCameraActive) {
+            await handsDetector.send({ image: videoElement });
+          }
+        },
+        width: 640,
+        height: 480
+      });
+
+      await cameraInstance.start();
+    }
+
+    // High-Precision 20-Gesture Hand Classifier with Cancel All (Palm Down)
+    function classifyHandGesture(lm) {
+      const thumbTip = lm[4], thumbIp = lm[3], thumbMcp = lm[2];
+      const indexTip = lm[8], indexPip = lm[6], indexMcp = lm[5];
+      const middleTip = lm[12], middlePip = lm[10], middleMcp = lm[9];
+      const ringTip = lm[16], ringPip = lm[14], ringMcp = lm[13];
+      const pinkyTip = lm[20], pinkyPip = lm[18], pinkyMcp = lm[17];
+      const wrist = lm[0];
+
+      // Finger Extension States
+      const isIndexUp = indexTip.y < indexPip.y && indexTip.y < indexMcp.y;
+      const isMiddleUp = middleTip.y < middlePip.y && middleTip.y < middleMcp.y;
+      const isRingUp = ringTip.y < ringPip.y && ringTip.y < ringMcp.y;
+      const isPinkyUp = pinkyTip.y < pinkyPip.y && pinkyTip.y < pinkyMcp.y;
+
+      const isThumbUp = thumbTip.y < thumbMcp.y && thumbTip.y < indexMcp.y;
+      const isThumbDown = thumbTip.y > wrist.y;
+      const isThumbOut = Math.abs(thumbTip.x - indexMcp.x) > 0.14;
+
+      const fingersUpCount = [isIndexUp, isMiddleUp, isRingUp, isPinkyUp].filter(Boolean).length;
+
+      // Distances
+      const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+      const isPinching = pinchDist < 0.07;
+      const crossedDist = Math.hypot(indexTip.x - middleTip.x, indexTip.y - middleTip.y);
+      const isCrossed = crossedDist < 0.04 && isIndexUp && isMiddleUp;
+
+      // Check for PALM DOWN / FLAT PUSH (🫳 Cancel All / I'm Okay)
+      // When wrist is above or level with knuckles and hand is flat pointing downward or flat horizontal
+      const isPalmDown = wrist.y < indexMcp.y && Math.abs(indexTip.y - middleTip.y) < 0.06 && fingersUpCount === 0 && !isThumbUp;
+      if (isPalmDown) {
+        return {
+          id: 'palm_down',
+          targetCardTitle: 'Cancel All / I\'m Okay',
+          name: 'Palm Down (Cancel All)',
+          icon: '🫳',
+          phrase: 'Please cancel my requests, I am doing okay now.',
+          category: 'Responses',
+          priority: 'low',
+          isCancelAll: true
+        };
+      }
+
+      // 1. EMERGENCY CLOSED FIST (✊ Hold Fist)
+      if (fingersUpCount === 0 && !isThumbUp && !isThumbDown && !isPalmDown) {
+        return {
+          id: 'closed_fist',
+          targetCardTitle: 'EMERGENCY SOS',
+          name: 'Closed Fist (SOS)',
+          icon: '✊',
+          phrase: 'EMERGENCY ASSISTANCE NEEDED!',
+          category: 'Emergency',
+          priority: 'urgent',
+          isEmergency: true
+        };
+      }
+
+      // 2. THUMBS UP (👍 Yes)
+      if (isThumbUp && fingersUpCount === 0) {
+        return findCardByGestureId('thumbs_up', 'Thumbs Up', '👍');
+      }
+
+      // 3. THUMBS DOWN (👎 In Pain)
+      if (isThumbDown && fingersUpCount === 0) {
+        return findCardByGestureId('thumbs_down', 'Thumbs Down', '👎');
+      }
+
+      // 4. CROSSED FINGERS (🤞 Bathroom)
+      if (isCrossed) {
+        return findCardByGestureId('crossed_two', 'Crossed Fingers', '🤞');
+      }
+
+      // 5. OK SIGN (👌 Medicine)
+      if (isPinching && isMiddleUp && isRingUp) {
+        return findCardByGestureId('ok_sign', 'OK Sign (Pinch+3)', '👌');
+      }
+
+      // 6. PINCH (🤏 Hungry)
+      if (isPinching && !isMiddleUp && !isRingUp) {
+        return findCardByGestureId('pinch_hand', 'Pinch Hand', '🤏');
+      }
+
+      // 7. HORNS / ROCK ON (🤘 Quiet Time)
+      if (isIndexUp && isPinkyUp && !isMiddleUp && !isRingUp && !isThumbOut) {
+        return findCardByGestureId('horns_sign', 'Horns (Index+Pinky)', '🤘');
+      }
+
+      // 8. ASL I LOVE YOU (🤟 Thank You)
+      if (isThumbOut && isIndexUp && isPinkyUp && !isMiddleUp && !isRingUp) {
+        return findCardByGestureId('asl_ily', 'ASL Love Sign', '🤟');
+      }
+
+      // 9. SHAKA (🤙 Call Family)
+      if (isThumbOut && isPinkyUp && !isIndexUp && !isMiddleUp && !isRingUp) {
+        return findCardByGestureId('shaka_call', 'Shaka Call Sign', '🤙');
+      }
+
+      // 10. PEACE / 2 FINGERS (✌️ Call Nurse)
+      if (isIndexUp && isMiddleUp && !isRingUp && !isPinkyUp) {
+        return findCardByGestureId('peace_sign', 'Peace (2 Fingers)', '✌️');
+      }
+
+      // 11. 1 FINGER POINT UP (☝️ Water / Thirsty)
+      if (isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp && !isThumbOut) {
+        return findCardByGestureId('point_up', '1 Finger Up', '☝️');
+      }
+
+      // 12. L-SHAPE (👆 Adjust Bed)
+      if (isIndexUp && isThumbOut && !isMiddleUp && !isRingUp && !isPinkyUp) {
+        return findCardByGestureId('l_shape', 'L-Shape (Thumb+Index)', '👆');
+      }
+
+      // 13. 3 FINGERS SPREAD (🤟 Cold)
+      if (isIndexUp && isMiddleUp && isRingUp && !isPinkyUp) {
+        return findCardByGestureId('three_fingers', '3 Fingers Spread', '🤟');
+      }
+
+      // 14. 4 FINGERS UP (🖖 Shortness of Breath)
+      if (fingersUpCount === 4 && !isThumbOut) {
+        return findCardByGestureId('four_fingers', '4 Fingers Up', '🖖');
+      }
+
+      // 15. 5 FINGERS / OPEN PALM (🖐️ Hot)
+      if (fingersUpCount === 4 && isThumbOut) {
+        return findCardByGestureId('open_palm', 'Open Palm (5 Fingers)', '🖐️');
+      }
+
+      // 16. POINT DOWN (👇 Tired)
+      if (indexTip.y > indexPip.y && indexTip.y > wrist.y && fingersUpCount === 0) {
+        return findCardByGestureId('point_down', 'Point Down', '👇');
+      }
+
+      // 17. POINT RIGHT / FLAT (👉 No)
+      if (Math.abs(indexTip.x - indexMcp.x) > 0.15 && !isMiddleUp && !isRingUp) {
+        return findCardByGestureId('flat_sideway', 'Point Right', '👉');
+      }
+
+      return null;
+    }
+
+    function findCardByGestureId(gestureId, defaultName, defaultIcon) {
+      for (const [title, mapping] of Object.entries(CARD_GESTURE_MAP)) {
+        if (mapping.gestureId === gestureId) {
+          const cardObj = allCards.find(c => c.title.toLowerCase() === title.toLowerCase()) || {
+            title: title,
+            phrase: title,
+            category: 'General',
+            priority: 'medium'
+          };
+          return {
+            id: gestureId,
+            targetCardTitle: cardObj.title,
+            name: mapping.signName || defaultName,
+            icon: mapping.icon || defaultIcon,
+            phrase: cardObj.phrase || cardObj.title,
+            category: cardObj.category || 'General',
+            priority: cardObj.priority || 'medium'
+          };
+        }
+      }
+      return null;
+    }
+
+    function handleRecognizedGesture(gesture) {
+      const tag = document.getElementById('gesture-detected-tag');
+      const title = document.getElementById('active-gesture-title');
+      const icon = document.getElementById('meter-icon');
+      const bar = document.getElementById('dwell-progress-bar');
+      const pct = document.getElementById('dwell-percentage');
+
+      document.querySelectorAll('.card-active-gesture').forEach(el => el.classList.remove('card-active-gesture'));
+
+      if (!gesture) {
+        currentDetectedGesture = null;
+        gestureStartTime = null;
+        tag.innerText = 'Show hand sign in frame...';
+        tag.className = 'px-3 py-1.5 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-slate-400';
+        title.innerText = 'Hold sign to confirm';
+        icon.innerText = '✋';
+        bar.style.width = '0%';
+        pct.innerText = '0%';
+        return;
+      }
+
+      if (gesture.targetCardTitle) {
+        const matchingCardEl = document.querySelector(`[data-card-title="${CSS.escape(gesture.targetCardTitle)}"]`);
+        if (matchingCardEl) {
+          matchingCardEl.classList.add('card-active-gesture');
+        }
+      }
+
+      if (!currentDetectedGesture || currentDetectedGesture.id !== gesture.id) {
+        currentDetectedGesture = gesture;
+        gestureStartTime = Date.now();
+      }
+
+      const elapsed = Date.now() - gestureStartTime;
+      const progress = Math.min(100, Math.round((elapsed / GESTURE_DWELL_MS) * 100));
+
+      tag.innerHTML = `<span class="text-teal-300 font-bold">${gesture.icon} ${gesture.name}</span> detected`;
+      tag.className = 'px-3 py-1.5 rounded-xl bg-teal-950/90 backdrop-blur-md border border-teal-500/40 text-xs font-bold text-teal-300';
+      title.innerText = `Selecting: "${gesture.targetCardTitle || gesture.name}"`;
+      icon.innerText = gesture.icon;
+      bar.style.width = `${progress}%`;
+      pct.innerText = `${progress}%`;
+
+      if (progress >= 100) {
+        const now = Date.now();
+        if (now - lastDispatchTimestamp > 3000) {
+          lastDispatchTimestamp = now;
+          dispatchGestureAction(gesture);
+        }
+      }
+    }
+
+    async function dispatchGestureAction(gesture) {
+      speakText(gesture.phrase);
+
+      if (gesture.isCancelAll) {
+        showToast('🫳 ALL REQUESTS CANCELLED', 'Patient confirmed doing okay / alarm cleared', false);
+        cancelAllRequests();
+      } else if (gesture.isEmergency) {
+        playAlertSound();
+        showToast(`🚨 ${gesture.icon} SOS GESTURE CONFIRMED`, 'Urgent alert sent to caregiver station!', true);
+        triggerEmergency('AI Gesture Tracking');
+      } else {
+        showToast(`✋ ${gesture.icon} Sign: "${gesture.name}"`, `Spoken: "${gesture.phrase}"`);
+        try {
+          await fetch(`${API_BASE}/requests`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: gesture.phrase,
+              category: gesture.category,
+              input_method: 'AI Gesture Tracking',
+              priority: gesture.priority,
+              room_number: 'Room 101',
+              patient_id: 'Patient 1'
+            })
+          });
+        } catch (e) {
+          console.error("Error dispatching gesture:", e);
+        }
+      }
+    }
+
+    // --- Cancel All Requests (I'm Okay / False Alarm) ---
+    async function cancelAllRequests() {
+      speakText("All requests cancelled. I am doing okay now.");
+      dismissEmergencyBanner();
+      showToast("✅ All Requests Cancelled", "Cleared nurse call and active alerts");
+
+      // Optimistically mark all pending requests as cancelled
+      allRequests = allRequests.map(r => {
+        return (r.status || 'Pending') === 'Pending' ? { ...r, status: 'Cancelled', notes: 'Patient cancelled (I am okay)' } : r;
+      });
+      selectedRequestIds.clear();
+      renderRequests();
+      updatePendingBadge();
+
+      try {
+        await fetch(`${API_BASE}/requests/cancel-all`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            room_number: 'Room 101',
+            patient_id: 'Patient 1',
+            reason: 'Patient cancelled all requests / False alarm'
+          })
+        });
+      } catch (err) {
+        console.error("Error cancelling all requests:", err);
+      }
+    }
+
+    // --- WebSocket Live Connection ---
+    function initWebSocket() {
+      const dot = document.getElementById('ws-dot');
+      const text = document.getElementById('ws-text');
+
+      try {
+        ws = new WebSocket(WS_BASE);
+
+        ws.onopen = () => {
+          dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+          text.innerText = 'Live Synced';
+          text.className = 'text-emerald-400 font-medium';
+        };
+
+        ws.onmessage = (event) => {
+          const payload = JSON.parse(event.data);
+
+          if (payload.event === 'emergency_alert') {
+            playAlertSound();
+            showEmergencyBanner(payload.data);
+            allRequests.unshift(payload.data);
+            renderRequests();
+            showToast('🚨 SOS ALERT TRIGGERED', 'Emergency request logged in caregiver queue', true);
+          } else if (payload.event === 'new_request') {
+            allRequests.unshift(payload.data);
+            renderRequests();
+            updatePendingBadge();
+          } else if (payload.event === 'request_status_updated') {
+            allRequests = allRequests.map(r => {
+              const reqId = r._id || r.id;
+              return reqId === payload.data.id ? { ...r, status: payload.data.status } : r;
+            });
+            renderRequests();
+            updatePendingBadge();
+          } else if (payload.event === 'requests_batch_resolved') {
+            const resolvedIdSet = new Set(payload.data.ids || []);
+            allRequests = allRequests.map(r => {
+              const reqId = r._id || r.id;
+              return resolvedIdSet.has(reqId) ? { ...r, status: payload.data.status } : r;
+            });
+            renderRequests();
+            updatePendingBadge();
+          } else if (payload.event === 'all_requests_cancelled') {
+            dismissEmergencyBanner();
+            allRequests = allRequests.map(r => {
+              return (r.status || 'Pending') === 'Pending' ? { ...r, status: 'Cancelled', notes: 'Cancelled by patient (I am okay)' } : r;
+            });
+            renderRequests();
+            updatePendingBadge();
+            showToast('ℹ️ Requests Cancelled by Patient', 'Room 101 confirmed they are okay', false);
+          }
+        };
+
+        ws.onclose = () => {
+          dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
+          text.innerText = 'Reconnecting...';
+          text.className = 'text-amber-400 font-medium';
+          setTimeout(initWebSocket, 3000);
+        };
+      } catch (err) {
+        console.error('WebSocket Error:', err);
+      }
+    }
+
+    // --- Patient Cards ---
+    async function fetchCards() {
+      try {
+        const res = await fetch(`${API_BASE}/cards`);
+        allCards = await res.json();
+        renderCards();
+      } catch (err) {
+        document.getElementById('cards-grid').innerHTML = `
+          <div class="col-span-full py-8 text-center text-red-400 bg-red-500/10 rounded-2xl border border-red-500/20">
+            Error loading cards from API (${err.message})
+          </div>`;
+      }
+    }
+
+    function renderCards() {
+      const grid = document.getElementById('cards-grid');
+      const filtered = activeCardCategory === 'All'
+        ? allCards
+        : allCards.filter(c => c.category.toLowerCase() === activeCardCategory.toLowerCase());
+
+      if (!filtered.length) {
+        grid.innerHTML = `<div class="col-span-full py-12 text-center text-slate-500">No cards in this category.</div>`;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(card => {
+        const isUrgent = card.priority === 'urgent';
+        const isCancelCard = card.title.toLowerCase().includes('cancel');
+        const gestureInfo = CARD_GESTURE_MAP[card.title] || { icon: "✋", signName: "Hand Sign" };
+
+        return `
+          <button data-card-title="${escapeHtml(card.title)}"
+                  onclick="${isCancelCard ? 'cancelAllRequests()' : `handleCardClick('${escapeHtml(card.title)}', '${escapeHtml(card.phrase)}', '${escapeHtml(card.category)}', '${card.priority}')`}"
+                  class="group text-left p-5 rounded-3xl bg-slate-900/80 border ${isCancelCard ? 'border-emerald-500/40 hover:border-emerald-400 hover:bg-emerald-950/20' : isUrgent ? 'border-red-500/30 hover:border-red-500 hover:bg-red-950/20' : 'border-slate-800 hover:border-teal-500/50 hover:bg-slate-800/80'} transition-all transform active:scale-95 shadow-xl flex flex-col justify-between min-h-[170px] relative overflow-hidden">
+            
+            <!-- Category & Gesture Badges -->
+            <div class="flex items-center justify-between w-full gap-2">
+              <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${isCancelCard ? 'bg-emerald-500/20 text-emerald-300' : isUrgent ? 'bg-red-500/20 text-red-400' : 'bg-teal-500/10 text-teal-400'}">
+                ${card.category}
+              </span>
+              
+              <!-- Assigned Gesture Pill Badge -->
+              <div class="px-2.5 py-1 rounded-xl bg-slate-950/80 border border-slate-700 text-xs font-bold text-teal-300 flex items-center gap-1.5 shadow-sm">
+                <span class="text-sm">${gestureInfo.icon}</span>
+                <span class="text-[11px] font-semibold text-slate-300">${gestureInfo.signName}</span>
+              </div>
+            </div>
+
+            <!-- Card Content -->
+            <div class="my-2">
+              <h3 class="text-base font-bold text-white group-hover:text-teal-300 transition-colors flex items-center justify-between">
+                <span>${card.title}</span>
+              </h3>
+              <p class="text-xs text-slate-400 line-clamp-2 mt-1 leading-snug">"${card.phrase}"</p>
+            </div>
+
+            <!-- Footer: Tap or Sign info -->
+            <div class="flex items-center justify-between pt-1 border-t border-slate-800/60 text-[10px] text-slate-400">
+              <span class="flex items-center gap-1"><i data-lucide="volume-2" class="w-3 h-3 text-teal-400"></i> Tap or Sign</span>
+              <span class="font-bold ${isCancelCard ? 'text-emerald-400' : isUrgent ? 'text-red-400' : 'text-slate-400'} uppercase">${card.priority}</span>
+            </div>
+          </button>`;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function filterCategory(cat) {
+      activeCardCategory = cat;
+      document.querySelectorAll('.cat-pill').forEach(btn => {
+        btn.className = btn.innerText.includes(cat) || (cat === 'All' && btn.innerText.includes('All'))
+          ? 'cat-pill active px-4 py-2 rounded-xl text-xs font-bold border transition-all bg-teal-500/20 border-teal-500/40 text-teal-300'
+          : 'cat-pill px-4 py-2 rounded-xl text-xs font-bold border transition-all bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700';
+      });
+      renderCards();
+    }
+
+    async function handleCardClick(title, phrase, category, priority) {
+      speakText(phrase);
+      showToast(`Speaking: "${title}"`, 'Sent message to caregiver queue');
+
+      try {
+        await fetch(`${API_BASE}/requests`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: phrase,
+            category: category,
+            input_method: 'Touch Grid',
+            priority: priority || 'medium',
+            room_number: 'Room 101',
+            patient_id: 'Patient 1'
+          })
+        });
+      } catch (e) {
+        console.error('Error posting request:', e);
+      }
+    }
+
+    async function triggerEmergency(inputMethod = 'Emergency Button') {
+      speakText('Emergency assistance requested immediately!');
+      playAlertSound();
+      showToast('🚨 SOS ALERT SENT', 'Medical staff notified with urgent priority!', true);
+
+      try {
+        await fetch(`${API_BASE}/requests/emergency`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: 'EMERGENCY NURSE CALL',
+            input_method: inputMethod,
+            room_number: 'Room 101',
+            patient_id: 'Patient 1'
+          })
+        });
+      } catch (e) {
+        console.error('Error sending emergency:', e);
+      }
+    }
+
+    // --- Caregiver Requests & Selection Logic ---
+    async function fetchRequests() {
+      try {
+        const res = await fetch(`${API_BASE}/requests?limit=50`);
+        allRequests = await res.json();
+        renderRequests();
+        updatePendingBadge();
+      } catch (e) {
+        console.error('Error fetching requests:', e);
+      }
+    }
+
+    function renderRequests() {
+      const list = document.getElementById('requests-list');
+      const filtered = activeRequestFilter === 'All'
+        ? allRequests
+        : allRequests.filter(r => (r.status || 'Pending').toLowerCase() === activeRequestFilter.toLowerCase());
+
+      const visiblePending = filtered.filter(r => (r.status || 'Pending') === 'Pending');
+      document.getElementById('visible-pending-count').innerText = visiblePending.length;
+
+      const selectAllCb = document.getElementById('select-all-checkbox');
+      if (visiblePending.length > 0 && visiblePending.every(r => selectedRequestIds.has(r._id || r.id))) {
+        selectAllCb.checked = true;
+        selectAllCb.indeterminate = false;
+      } else if (visiblePending.some(r => selectedRequestIds.has(r._id || r.id))) {
+        selectAllCb.checked = false;
+        selectAllCb.indeterminate = true;
+      } else {
+        selectAllCb.checked = false;
+        selectAllCb.indeterminate = false;
+      }
+
+      updateBatchToolbar();
+
+      if (!filtered.length) {
+        list.innerHTML = `
+          <div class="py-16 text-center text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800">
+            <i data-lucide="check-circle-2" class="w-8 h-8 mx-auto mb-2 text-emerald-400/50"></i>
+            No ${activeRequestFilter} requests in queue.
+          </div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      list.innerHTML = filtered.map(req => {
+        const reqId = req._id || req.id;
+        const isUrgent = req.priority === 'urgent' || req.category === 'Emergency';
+        const isCompleted = (req.status || 'Pending') === 'Completed' || req.status === 'Resolved';
+        const isCancelled = (req.status || '').toLowerCase() === 'cancelled';
+        const isGesture = req.input_method && req.input_method.includes('Gesture');
+        const isSelected = selectedRequestIds.has(reqId);
+        const formattedTime = req.created_at ? new Date(req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
+
+        return `
+          <div class="p-4 sm:p-5 rounded-2xl bg-slate-900 border ${isSelected ? 'border-teal-500 bg-teal-950/20 shadow-lg shadow-teal-500/10' : isUrgent ? 'border-red-500/40 bg-red-950/10' : isCancelled ? 'border-slate-800 opacity-60' : 'border-slate-800'} flex items-center justify-between gap-4 transition-all">
+            
+            <div class="flex items-center gap-3.5 flex-1 min-w-0">
+              ${!isCompleted && !isCancelled ? `
+                <input type="checkbox" onchange="toggleSelectRequest('${reqId}', this.checked)" ${isSelected ? 'checked' : ''} class="w-5 h-5 rounded text-teal-500 bg-slate-950 border-slate-700 focus:ring-teal-500 cursor-pointer">
+              ` : `
+                <div class="w-5 h-5 rounded-full ${isCancelled ? 'bg-slate-800 text-slate-400' : 'bg-emerald-500/20 text-emerald-400'} flex items-center justify-center text-xs">
+                  <i data-lucide="${isCancelled ? 'x' : 'check'}" class="w-3.5 h-3.5"></i>
+                </div>
+              `}
+
+              <div class="space-y-1.5 flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold ${isUrgent ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-slate-800 text-slate-300'}">
+                    ${req.room_number || 'Room 101'}
+                  </span>
+                  <span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold ${isUrgent ? 'bg-red-500 text-white' : 'bg-teal-500/10 text-teal-400'}">
+                    ${req.category || 'General'}
+                  </span>
+                  ${isGesture ? '<span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">✋ AI Gesture</span>' : ''}
+                  <span class="text-xs text-slate-400 flex items-center gap-1">
+                    <i data-lucide="clock" class="w-3 h-3"></i> ${formattedTime}
+                  </span>
+                  ${isCompleted ? '<span class="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">Resolved</span>' : ''}
+                  ${isCancelled ? '<span class="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 text-[10px] font-bold">Cancelled / I\'m Okay</span>' : ''}
+                </div>
+                <h4 class="text-base font-bold text-white truncate">${escapeHtml(req.message)}</h4>
+                ${req.notes ? `<p class="text-xs ${isCancelled ? 'text-slate-400' : 'text-emerald-400/90'} font-medium">Notes: ${escapeHtml(req.notes)}</p>` : ''}
+              </div>
+            </div>
+
+            ${!isCompleted && !isCancelled ? `
+              <button onclick="openResolveModal('${reqId}')" class="shrink-0 px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 font-bold text-xs transition-all flex items-center gap-2 border border-emerald-500/30 shadow-sm">
+                <i data-lucide="check" class="w-4 h-4"></i>
+                Resolve
+              </button>` : ''}
+          </div>`;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function toggleSelectRequest(reqId, isSelected) {
+      if (isSelected) {
+        selectedRequestIds.add(reqId);
+      } else {
+        selectedRequestIds.delete(reqId);
+      }
+      renderRequests();
+    }
+
+    function toggleSelectAll(isChecked) {
+      const filtered = activeRequestFilter === 'All'
+        ? allRequests
+        : allRequests.filter(r => (r.status || 'Pending').toLowerCase() === activeRequestFilter.toLowerCase());
+      
+      const visiblePending = filtered.filter(r => (r.status || 'Pending') === 'Pending');
+
+      if (isChecked) {
+        visiblePending.forEach(r => selectedRequestIds.add(r._id || r.id));
+      } else {
+        visiblePending.forEach(r => selectedRequestIds.delete(r._id || r.id));
+      }
+      renderRequests();
+    }
+
+    function clearSelection() {
+      selectedRequestIds.clear();
+      renderRequests();
+    }
+
+    function updateBatchToolbar() {
+      const count = selectedRequestIds.size;
+      const badge = document.getElementById('selected-count-badge');
+      const clearBtn = document.getElementById('btn-clear-selection');
+      const resolveBtn = document.getElementById('btn-batch-resolve');
+
+      if (count > 0) {
+        badge.innerText = `${count} selected`;
+        badge.classList.remove('hidden');
+        clearBtn.classList.remove('hidden');
+        resolveBtn.disabled = false;
+        resolveBtn.className = 'px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all cursor-pointer';
+        resolveBtn.innerHTML = `<i data-lucide="check-check" class="w-4 h-4"></i> Resolve Selected (${count})`;
+      } else {
+        badge.classList.add('hidden');
+        clearBtn.classList.add('hidden');
+        resolveBtn.disabled = true;
+        resolveBtn.className = 'px-4 py-2 rounded-xl bg-emerald-500/20 text-slate-500 font-bold text-xs flex items-center gap-2 transition-all cursor-not-allowed';
+        resolveBtn.innerHTML = `<i data-lucide="check-check" class="w-4 h-4"></i> Resolve Selected (0)`;
+      }
+      lucide.createIcons();
+    }
+
+    function openBatchResolveModal() {
+      if (selectedRequestIds.size === 0) return;
+      document.getElementById('batch-modal-count').innerText = selectedRequestIds.size;
+      document.getElementById('batch-resolve-modal').classList.remove('hidden');
+    }
+
+    function closeBatchResolveModal() {
+      document.getElementById('batch-resolve-modal').classList.add('hidden');
+    }
+
+    async function confirmBatchResolve() {
+      const idsArray = Array.from(selectedRequestIds);
+      if (!idsArray.length) return;
+
+      const nurse = document.getElementById('batch-caregiver-name').value || 'Nurse Station';
+      const notes = document.getElementById('batch-caregiver-notes').value || 'Batch resolved';
+
+      const idSet = new Set(idsArray);
+      allRequests = allRequests.map(r => {
+        const rId = r._id || r.id;
+        return idSet.has(rId) ? { ...r, status: 'Completed', notes: notes, resolved_by: nurse } : r;
+      });
+
+      selectedRequestIds.clear();
+      renderRequests();
+      updatePendingBadge();
+      closeBatchResolveModal();
+      showToast(`✅ ${idsArray.length} Requests Resolved`, 'Updated status in MongoDB database');
+
+      try {
+        await fetch(`${API_BASE}/requests/batch-resolve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            request_ids: idsArray,
+            status: 'Completed',
+            resolved_by: nurse,
+            notes: notes
+          })
+        });
+      } catch (err) {
+        console.error('Error batch resolving requests:', err);
+      }
+    }
+
+    function filterRequests(status) {
+      activeRequestFilter = status;
+      selectedRequestIds.clear();
+      ['Pending', 'Completed', 'All'].forEach(s => {
+        const btn = document.getElementById(`req-filter-${s.toLowerCase()}`);
+        btn.className = s === status
+          ? 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-teal-500 text-slate-950'
+          : 'px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+      });
+      renderRequests();
+    }
+
+    function updatePendingBadge() {
+      const pendingCount = allRequests.filter(r => (r.status || 'Pending') === 'Pending').length;
+      const badge = document.getElementById('pending-badge');
+      if (pendingCount > 0) {
+        badge.innerText = pendingCount;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    function openResolveModal(reqId) {
+      resolvingRequestId = reqId;
+      document.getElementById('resolve-modal').classList.remove('hidden');
+    }
+
+    function closeResolveModal() {
+      resolvingRequestId = null;
+      document.getElementById('resolve-modal').classList.add('hidden');
+    }
+
+    async function confirmResolve() {
+      if (!resolvingRequestId) return;
+      const nurse = document.getElementById('caregiver-name').value || 'Nurse Station';
+      const notes = document.getElementById('caregiver-notes').value || 'Assistance provided';
+
+      allRequests = allRequests.map(r => {
+        const rId = r._id || r.id;
+        return rId === resolvingRequestId ? { ...r, status: 'Completed', notes: notes, resolved_by: nurse } : r;
+      });
+      selectedRequestIds.delete(resolvingRequestId);
+      renderRequests();
+      updatePendingBadge();
+      closeResolveModal();
+      showToast('Request Marked Resolved', 'Saved to MongoDB database');
+
+      try {
+        await fetch(`${API_BASE}/requests/${resolvingRequestId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'Completed',
+            resolved_by: nurse,
+            notes: notes
+          })
+        });
+      } catch (err) {
+        console.error('Error resolving request:', err);
+      }
+    }
+
+    // --- Analytics ---
+    async function fetchAnalytics() {
+      try {
+        const res = await fetch(`${API_BASE}/analytics/stats`);
+        const data = await res.json();
+
+        document.getElementById('stat-total').innerText = data.total_requests || 0;
+        document.getElementById('stat-pending').innerText = data.pending_requests || 0;
+        document.getElementById('stat-completed').innerText = data.completed_requests || 0;
+        document.getElementById('stat-urgent').innerText = data.urgent_requests || 0;
+
+        const catBox = document.getElementById('category-bars');
+        const catEntries = Object.entries(data.category_breakdown || {});
+        if (!catEntries.length) {
+          catBox.innerHTML = '<p class="text-xs text-slate-500">No requests recorded yet.</p>';
+        } else {
+          const maxVal = Math.max(...catEntries.map(e => e[1]), 1);
+          catBox.innerHTML = catEntries.map(([cat, count]) => `
+            <div class="space-y-1">
+              <div class="flex justify-between text-xs font-semibold text-slate-300">
+                <span>${cat}</span>
+                <span>${count}</span>
+              </div>
+              <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+                <div class="bg-teal-500 h-full rounded-full transition-all" style="width: ${(count/maxVal)*100}%"></div>
+              </div>
+            </div>`).join('');
+        }
+
+        const prioBox = document.getElementById('priority-bars');
+        const prioEntries = Object.entries(data.priority_breakdown || {});
+        if (!prioEntries.length) {
+          prioBox.innerHTML = '<p class="text-xs text-slate-500">No requests recorded yet.</p>';
+        } else {
+          const maxVal = Math.max(...prioEntries.map(e => e[1]), 1);
+          prioBox.innerHTML = prioEntries.map(([prio, count]) => `
+            <div class="space-y-1">
+              <div class="flex justify-between text-xs font-semibold text-slate-300">
+                <span class="capitalize">${prio}</span>
+                <span>${count}</span>
+              </div>
+              <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+                <div class="${prio === 'urgent' ? 'bg-red-500' : 'bg-cyan-500'} h-full rounded-full transition-all" style="width: ${(count/maxVal)*100}%"></div>
+              </div>
+            </div>`).join('');
+        }
+      } catch (err) {
+        console.error('Error fetching analytics:', err);
+      }
+    }
+
+    // --- Utilities ---
+    function speakText(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.95;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    function playAlertSound() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } catch (e) {}
+    }
+
+    function showToast(title, msg, isUrgent = false) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-title').innerText = title;
+      document.getElementById('toast-msg').innerText = msg;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+    }
+
+    function showEmergencyBanner(data) {
+      document.getElementById('active-emergency-box').classList.remove('hidden');
+      document.getElementById('emergency-details').innerText = `${data.room_number || 'Room 101'}: ${data.message || 'Urgent assistance needed'}`;
+    }
+
+    function dismissEmergencyBanner() {
+      document.getElementById('active-emergency-box').classList.add('hidden');
+    }
+
+    function escapeHtml(str) {
+      return String(str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+  </script>
+</body>
+</html>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-teal-500 selection:text-white">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-cyan-400 flex items-center justify-center text-slate-950 shadow-lg shadow-teal-500/20">
+          <i data-lucide="scan-face" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            AssistFlow
+            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20">AI Vision Pro</span>
+          </h1>
           <p class="text-xs text-slate-400">20+ Sign Language Gestures & AAC Grid</p>
         </div>
       </div>
