@@ -1,40 +1,4 @@
-cd ~/assist-flow-backend
-cat main.py | pbcopyif os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
-
-client = AsyncIOMotorClient(os.getenv("MONGO_URI"))
-db = client[os.getenv("DB_NAME", "assist_flow")]
-cards_collection = db["cards"]
-requests_collection = db["requests"]
-profiles_collection = db["profiles"]
-
-# --- WebSocket Manager for Real-Time Live Updates ---
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-
-    async def broadcast(self, event_type: str, payload: dict):
-        message = json.dumps({"event": event_type, "data": payload})
-        for connection in list(self.active_connections):
-            try:
-                await connection.send_text(message)
-            except Exception:
-                self.disconnect(connection)
-
-manager = ConnectionManager()
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
+OpenCV    try:
         while True:
             data = await websocket.receive_text()
             if data == "ping":
