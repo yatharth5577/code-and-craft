@@ -1,40 +1,5 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-from datetime import datetime
-from bson import ObjectId
-import json
-import os
-
-load_dotenv()
-
-app = FastAPI(
-    title="AssistFlow Backend",
-    description="Backend API for AssistFlow AAC & Caregiver Assistance System",
-    version="1.2.0"
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://express-assist-flow.lovable.app",
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:8080",
-        "*",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Serve Frontend Static Directory
-if os.path.exists("static"):
+cd ~/assist-flow-backend
+cat main.py | pbcopyif os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
 client = AsyncIOMotorClient(os.getenv("MONGO_URI"))
