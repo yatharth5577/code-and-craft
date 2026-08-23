@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AssistFlow — AAC & Caregiver Station</title>
+  <title>AssistFlow — AAC & AI Gesture Sign Language System</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
@@ -13,6 +13,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
+  <!-- MediaPipe / Computer Vision Hands Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; }
     @keyframes pulse-red {
@@ -20,6 +25,7 @@
       50% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
     }
     .pulse-emergency { animation: pulse-red 2s infinite; }
+    .mirror-mode { transform: scaleX(-1); }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-teal-500 selection:text-white">
@@ -31,22 +37,22 @@
       <!-- Brand Logo -->
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-500 to-cyan-400 flex items-center justify-center text-slate-950 shadow-lg shadow-teal-500/20">
-          <i data-lucide="heart-handshake" class="w-6 h-6"></i>
+          <i data-lucide="scan-face" class="w-6 h-6"></i>
         </div>
         <div>
           <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
             AssistFlow
-            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20">AAC Cloud</span>
+            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20">AI Vision + AAC</span>
           </h1>
-          <p class="text-xs text-slate-400">Communication & Caregiver System</p>
+          <p class="text-xs text-slate-400">Sign Language & Gesture Recognition</p>
         </div>
       </div>
 
       <!-- View Selector Tabs -->
       <nav class="flex items-center bg-slate-950/60 p-1.5 rounded-xl border border-slate-800">
         <button onclick="switchView('patient')" id="tab-patient" class="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all bg-teal-500 text-slate-950 shadow-md">
-          <i data-lucide="user" class="w-4 h-4"></i>
-          Patient
+          <i data-lucide="hand" class="w-4 h-4"></i>
+          Patient & Gestures
         </button>
         <button onclick="switchView('caregiver')" id="tab-caregiver" class="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold text-slate-400 hover:text-slate-200 transition-all relative">
           <i data-lucide="activity" class="w-4 h-4"></i>
@@ -85,10 +91,145 @@
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
     <!-- ========================================== -->
-    <!-- VIEW 1: PATIENT COMMUNICATOR               -->
+    <!-- VIEW 1: PATIENT COMMUNICATOR + AI VISION   -->
     <!-- ========================================== -->
     <section id="view-patient" class="space-y-6">
       
+      <!-- AI Gesture & Sign Language Camera Panel -->
+      <div class="bg-slate-900/90 border border-teal-500/30 rounded-3xl p-6 shadow-2xl backdrop-blur-xl space-y-4">
+        
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <div class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-teal-400 bg-teal-500/10 px-3 py-1 rounded-full border border-teal-500/20">
+              <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+              OpenCV / MediaPipe AI Hand Tracking
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-white mt-1">Touch-Free Gesture & Sign Language Control</h2>
+            <p class="text-xs text-slate-400">Perform hand signs in front of the camera to speak and send requests hands-free.</p>
+          </div>
+
+          <!-- Camera Toggle Switch -->
+          <div class="flex items-center gap-3 bg-slate-950 p-2 rounded-2xl border border-slate-800">
+            <span class="text-xs font-semibold text-slate-300" id="cam-status-label">Camera Off</span>
+            <button onclick="toggleCamera()" id="btn-toggle-cam" class="px-4 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-teal-500/20 transition-all">
+              <i data-lucide="video" class="w-4 h-4"></i>
+              Enable Gesture Vision
+            </button>
+          </div>
+        </div>
+
+        <!-- Vision Interface Area (Hidden by default until Camera Enabled) -->
+        <div id="vision-container" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+          
+          <!-- Live Camera Feed Box -->
+          <div class="lg:col-span-2 relative bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 aspect-video flex items-center justify-center">
+            <!-- Video (hidden source) -->
+            <video id="webcam-video" class="hidden" autoplay playsinline></video>
+            <!-- Canvas with skeleton landmarks -->
+            <canvas id="landmark-canvas" class="w-full h-full object-cover mirror-mode"></canvas>
+            
+            <!-- Tracking Overlay Banner -->
+            <div class="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
+              <div class="px-3 py-1.5 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-semibold text-teal-300 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <span>21 Hand Landmarks Active</span>
+              </div>
+              <div id="gesture-detected-tag" class="px-3 py-1.5 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-slate-400">
+                Waiting for gesture...
+              </div>
+            </div>
+
+            <!-- Dwell Meter (Radial/Bar confirmation progress) -->
+            <div class="absolute bottom-4 left-4 right-4 bg-slate-950/90 backdrop-blur-md p-3 rounded-xl border border-slate-800 flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold text-sm" id="meter-icon">
+                ✋
+              </div>
+              <div class="flex-1">
+                <div class="flex justify-between text-xs font-bold mb-1">
+                  <span id="active-gesture-title" class="text-white">Hold sign to trigger</span>
+                  <span id="dwell-percentage" class="text-teal-400">0%</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                  <div id="dwell-progress-bar" class="bg-gradient-to-r from-teal-500 to-cyan-400 h-full rounded-full transition-all duration-75" style="width: 0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gesture Sign Legend & Dictionary -->
+          <div class="bg-slate-950/80 rounded-2xl p-4 border border-slate-800 space-y-3 flex flex-col justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-teal-400 flex items-center gap-2">
+              <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+              Supported Gesture Dictionary
+            </h3>
+
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">🖐️</span>
+                  <span class="font-bold text-white">Open Palm</span>
+                </div>
+                <span class="text-teal-400 font-semibold">"Need Help / Hello"</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">👍</span>
+                  <span class="font-bold text-white">Thumbs Up</span>
+                </div>
+                <span class="text-emerald-400 font-semibold">"Yes / That's Right"</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">👎</span>
+                  <span class="font-bold text-white">Thumbs Down</span>
+                </div>
+                <span class="text-amber-400 font-semibold">"No / Discomfort"</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">✌️</span>
+                  <span class="font-bold text-white">Victory / Peace</span>
+                </div>
+                <span class="text-cyan-400 font-semibold">"Call Nurse"</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">☝️</span>
+                  <span class="font-bold text-white">Point Up</span>
+                </div>
+                <span class="text-teal-400 font-semibold">"Water / Thirsty"</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-800/80">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">🤟</span>
+                  <span class="font-bold text-white">ASL Love</span>
+                </div>
+                <span class="text-pink-400 font-semibold">"Thank You"</span>
+              </div>
+
+              <div class="flex items-center justify-between p-2 rounded-xl bg-red-950/40 border border-red-500/30">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">✊</span>
+                  <span class="font-bold text-red-300">Closed Fist (Hold)</span>
+                </div>
+                <span class="text-red-400 font-bold">"EMERGENCY SOS"</span>
+              </div>
+            </div>
+
+            <p class="text-[11px] text-slate-400 leading-tight">
+              💡 <em>Hold any hand sign steadily for 1.2 seconds to auto-speak and dispatch.</em>
+            </p>
+          </div>
+
+        </div>
+
+      </div>
+
       <!-- Emergency SOS Banner Button -->
       <div class="bg-gradient-to-r from-red-950/40 via-red-900/20 to-slate-900 border border-red-500/30 rounded-3xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-2xl">
         <div class="space-y-1 text-center sm:text-left">
@@ -97,10 +238,10 @@
             Immediate Medical Assistance
           </div>
           <h2 class="text-2xl sm:text-3xl font-extrabold text-white">Emergency Assistance Needed?</h2>
-          <p class="text-sm text-slate-400">Press the SOS button below to trigger an urgent nurse alarm.</p>
+          <p class="text-sm text-slate-400">Press the SOS button or hold a Closed Fist to trigger an urgent nurse alarm.</p>
         </div>
 
-        <button onclick="triggerEmergency()" class="pulse-emergency w-full sm:w-auto px-8 py-5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white font-extrabold text-lg flex items-center justify-center gap-3 transition-transform active:scale-95 shadow-xl shadow-red-600/30">
+        <button onclick="triggerEmergency('Emergency Button')" class="pulse-emergency w-full sm:w-auto px-8 py-5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white font-extrabold text-lg flex items-center justify-center gap-3 transition-transform active:scale-95 shadow-xl shadow-red-600/30">
           <i data-lucide="siren" class="w-7 h-7"></i>
           URGENT SOS / NURSE
         </button>
@@ -130,7 +271,6 @@
 
       <!-- Phrase Tiles Grid -->
       <div id="cards-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-        <!-- Dynamically Loaded Cards -->
         <div class="col-span-full py-16 text-center text-slate-500">
           <i data-lucide="loader-2" class="w-8 h-8 animate-spin mx-auto mb-2 text-teal-500"></i>
           Loading communication cards from MongoDB...
@@ -144,14 +284,13 @@
     <!-- ========================================== -->
     <section id="view-caregiver" class="hidden space-y-6">
       
-      <!-- Top Stats & Filter Bar -->
       <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
         <div>
           <h2 class="text-xl font-bold text-white flex items-center gap-2">
             <i data-lucide="radio" class="w-5 h-5 text-teal-400"></i>
             Live Patient Request Feed
           </h2>
-          <p class="text-xs text-slate-400">Real-time WebSocket alerts from Room 101 & Patient terminals</p>
+          <p class="text-xs text-slate-400">Real-time WebSocket alerts from Room 101 (Touch Grid & Gesture Tracking)</p>
         </div>
 
         <div class="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
@@ -212,7 +351,6 @@
         </button>
       </div>
 
-      <!-- 4 Stat Cards -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-2xl space-y-2">
           <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
@@ -247,7 +385,6 @@
         </div>
       </div>
 
-      <!-- Breakdown Bars -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="bg-slate-900/60 border border-slate-800 p-6 rounded-2xl space-y-4">
           <h3 class="text-sm font-bold text-slate-200">Category Distribution</h3>
@@ -287,8 +424,8 @@
           <input type="text" id="caregiver-name" value="Nurse Station" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-teal-500">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-400 mb-1">Resolution Notes (Optional)</label>
-          <textarea id="caregiver-notes" placeholder="e.g. Provided water, assisted with posture." rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-teal-500"></textarea>
+          <label class="block text-xs font-semibold text-slate-400 mb-1">Resolution Notes</label>
+          <textarea id="caregiver-notes" placeholder="e.g. Responded to sign gesture, checked IV line." rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-teal-500"></textarea>
         </div>
       </div>
 
@@ -304,9 +441,8 @@
     </div>
   </div>
 
-  <!-- JavaScript Application Logic -->
+  <!-- JavaScript Application & AI Vision Logic -->
   <script>
-    // Configuration
     const API_BASE = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
       ? 'https://assist-flow-backend.onrender.com'
       : window.location.origin;
@@ -320,7 +456,16 @@
     let resolvingRequestId = null;
     let ws = null;
 
-    // Initialize App
+    // Camera & MediaPipe State
+    let isCameraActive = false;
+    let cameraInstance = null;
+    let handsDetector = null;
+    let currentDetectedGesture = null;
+    let gestureStartTime = null;
+    const GESTURE_DWELL_MS = 1200; // 1.2s to confirm gesture
+    let lastDispatchedGesture = null;
+    let lastDispatchTimestamp = 0;
+
     window.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       fetchCards();
@@ -348,6 +493,285 @@
       if (viewName === 'caregiver') fetchRequests();
       if (viewName === 'analytics') fetchAnalytics();
       lucide.createIcons();
+    }
+
+    // --- MediaPipe / OpenCV AI Hand Gesture Recognition Engine ---
+    async function toggleCamera() {
+      const container = document.getElementById('vision-container');
+      const btn = document.getElementById('btn-toggle-cam');
+      const status = document.getElementById('cam-status-label');
+
+      if (isCameraActive) {
+        // Stop Camera
+        if (cameraInstance) {
+          cameraInstance.stop();
+        }
+        isCameraActive = false;
+        container.classList.add('hidden');
+        btn.innerHTML = `<i data-lucide="video" class="w-4 h-4"></i> Enable Gesture Vision`;
+        btn.className = 'px-4 py-2 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-teal-500/20 transition-all';
+        status.innerText = 'Camera Off';
+        lucide.createIcons();
+      } else {
+        // Start Camera & Load MediaPipe
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Initializing Vision AI...`;
+        container.classList.remove('hidden');
+        lucide.createIcons();
+
+        try {
+          await initHandTracking();
+          isCameraActive = true;
+          btn.innerHTML = `<i data-lucide="video-off" class="w-4 h-4"></i> Disable Camera`;
+          btn.className = 'px-4 py-2 rounded-xl bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/30 font-bold text-xs flex items-center gap-2 transition-all';
+          status.innerText = 'AI Vision Tracking: ON';
+          lucide.createIcons();
+        } catch (e) {
+          console.error("Camera Init Error:", e);
+          alert("Could not access webcam. Please allow camera permissions in your browser.");
+          btn.innerHTML = `<i data-lucide="video" class="w-4 h-4"></i> Retry Camera`;
+          lucide.createIcons();
+        }
+      }
+    }
+
+    async function initHandTracking() {
+      const videoElement = document.getElementById('webcam-video');
+      const canvasElement = document.getElementById('landmark-canvas');
+      const canvasCtx = canvasElement.getContext('2d');
+
+      handsDetector = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      });
+
+      handsDetector.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.65,
+        minTrackingConfidence: 0.65
+      });
+
+      handsDetector.onResults((results) => {
+        canvasElement.width = videoElement.videoWidth || 640;
+        canvasElement.height = videoElement.videoHeight || 480;
+
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          const landmarks = results.multiHandLandmarks[0];
+
+          // Draw skeleton joints and bones in glowing teal
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#14b8a6', lineWidth: 3 });
+          drawLandmarks(canvasCtx, landmarks, { color: '#38bdf8', lineWidth: 1, radius: 4 });
+
+          // Classify Hand Gesture
+          const gesture = classifyHandGesture(landmarks);
+          handleRecognizedGesture(gesture);
+        } else {
+          handleRecognizedGesture(null);
+        }
+
+        canvasCtx.restore();
+      });
+
+      cameraInstance = new Camera(videoElement, {
+        onFrame: async () => {
+          if (isCameraActive) {
+            await handsDetector.send({ image: videoElement });
+          }
+        },
+        width: 640,
+        height: 480
+      });
+
+      await cameraInstance.start();
+    }
+
+    // Mathematical Gesture & Sign Language Classifier
+    function classifyHandGesture(lm) {
+      // Landmark indices:
+      // Thumb: 4, Index: 8, Middle: 12, Ring: 16, Pinky: 20
+      // Base joints: Wrist: 0, Index_MCP: 5, Middle_MCP: 9, Ring_MCP: 13, Pinky_MCP: 17
+
+      const thumbTip = lm[4], thumbIp = lm[3], thumbMcp = lm[2];
+      const indexTip = lm[8], indexPip = lm[6], indexMcp = lm[5];
+      const middleTip = lm[12], middlePip = lm[10], middleMcp = lm[9];
+      const ringTip = lm[16], ringPip = lm[14], ringMcp = lm[13];
+      const pinkyTip = lm[20], pinkyPip = lm[18], pinkyMcp = lm[17];
+      const wrist = lm[0];
+
+      const isIndexUp = indexTip.y < indexPip.y && indexTip.y < indexMcp.y;
+      const isMiddleUp = middleTip.y < middlePip.y && middleTip.y < middleMcp.y;
+      const isRingUp = ringTip.y < ringPip.y && ringTip.y < ringMcp.y;
+      const isPinkyUp = pinkyTip.y < pinkyPip.y && pinkyTip.y < pinkyMcp.y;
+
+      const isThumbUp = thumbTip.y < thumbMcp.y && thumbTip.y < indexMcp.y;
+      const isThumbDown = thumbTip.y > wrist.y;
+
+      const fingersUpCount = [isIndexUp, isMiddleUp, isRingUp, isPinkyUp].filter(Boolean).length;
+
+      // 1. OPEN PALM (🖐️ Hello / Need Help)
+      if (fingersUpCount === 4 && (thumbTip.x < thumbMcp.x || thumbTip.x > thumbMcp.x)) {
+        return {
+          id: 'open_palm',
+          name: 'Open Palm',
+          icon: '🖐️',
+          phrase: 'I need some help, please.',
+          category: 'Basic Needs',
+          priority: 'medium'
+        };
+      }
+
+      // 2. CLOSED FIST (✊ Emergency Stop / SOS)
+      if (fingersUpCount === 0 && !isThumbUp && !isThumbDown) {
+        return {
+          id: 'closed_fist',
+          name: 'Closed Fist',
+          icon: '✊',
+          phrase: 'EMERGENCY ASSISTANCE NEEDED!',
+          category: 'Emergency',
+          priority: 'urgent',
+          isEmergency: true
+        };
+      }
+
+      // 3. THUMBS UP (👍 Yes / Good)
+      if (isThumbUp && fingersUpCount === 0) {
+        return {
+          id: 'thumbs_up',
+          name: 'Thumbs Up',
+          icon: '👍',
+          phrase: 'Yes, that is correct.',
+          category: 'Responses',
+          priority: 'low'
+        };
+      }
+
+      // 4. THUMBS DOWN (👎 No / In Pain)
+      if (isThumbDown && fingersUpCount === 0) {
+        return {
+          id: 'thumbs_down',
+          name: 'Thumbs Down',
+          icon: '👎',
+          phrase: 'No, that is not what I want.',
+          category: 'Responses',
+          priority: 'low'
+        };
+      }
+
+      // 5. VICTORY / PEACE (✌️ Call Nurse)
+      if (isIndexUp && isMiddleUp && !isRingUp && !isPinkyUp) {
+        return {
+          id: 'peace_sign',
+          name: 'Peace / Nurse Call',
+          icon: '✌️',
+          phrase: 'Please call the nurse right away.',
+          category: 'Pain & Care',
+          priority: 'urgent'
+        };
+      }
+
+      // 6. POINT UP (☝️ Water / Thirsty)
+      if (isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp) {
+        return {
+          id: 'point_up',
+          name: 'Point Up (Water)',
+          icon: '☝️',
+          phrase: 'I need some water, please.',
+          category: 'Basic Needs',
+          priority: 'medium'
+        };
+      }
+
+      // 7. I LOVE YOU SIGN (🤟 ASL Thank You)
+      if (isIndexUp && isPinkyUp && !isMiddleUp && !isRingUp) {
+        return {
+          id: 'asl_ily',
+          name: 'ASL Sign (Thank You)',
+          icon: '🤟',
+          phrase: 'Thank you very much for your help.',
+          category: 'Responses',
+          priority: 'low'
+        };
+      }
+
+      return null;
+    }
+
+    // Handles Dwell Time Confirmation
+    function handleRecognizedGesture(gesture) {
+      const tag = document.getElementById('gesture-detected-tag');
+      const title = document.getElementById('active-gesture-title');
+      const icon = document.getElementById('meter-icon');
+      const bar = document.getElementById('dwell-progress-bar');
+      const pct = document.getElementById('dwell-percentage');
+
+      if (!gesture) {
+        currentDetectedGesture = null;
+        gestureStartTime = null;
+        tag.innerText = 'Waiting for gesture...';
+        tag.className = 'px-3 py-1.5 rounded-xl bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-bold text-slate-400';
+        title.innerText = 'Hold sign to trigger';
+        icon.innerText = '✋';
+        bar.style.width = '0%';
+        pct.innerText = '0%';
+        return;
+      }
+
+      // Check if gesture changed
+      if (!currentDetectedGesture || currentDetectedGesture.id !== gesture.id) {
+        currentDetectedGesture = gesture;
+        gestureStartTime = Date.now();
+      }
+
+      const elapsed = Date.now() - gestureStartTime;
+      const progress = Math.min(100, Math.round((elapsed / GESTURE_DWELL_MS) * 100));
+
+      tag.innerHTML = `<span class="text-teal-300 font-bold">${gesture.icon} ${gesture.name}</span> detected`;
+      tag.className = 'px-3 py-1.5 rounded-xl bg-teal-950/90 backdrop-blur-md border border-teal-500/40 text-xs font-bold text-teal-300';
+      title.innerText = `Holding: "${gesture.name}"`;
+      icon.innerText = gesture.icon;
+      bar.style.width = `${progress}%`;
+      pct.innerText = `${progress}%`;
+
+      // Trigger action when hold reaches 100%
+      if (progress >= 100) {
+        const now = Date.now();
+        // Cooldown of 3 seconds per trigger to prevent repeated duplicate spam
+        if (now - lastDispatchTimestamp > 3000) {
+          lastDispatchTimestamp = now;
+          dispatchGestureAction(gesture);
+        }
+      }
+    }
+
+    async function dispatchGestureAction(gesture) {
+      speakText(gesture.phrase);
+
+      if (gesture.isEmergency) {
+        playAlertSound();
+        showToast(`🚨 ${gesture.icon} SOS GESTURE CONFIRMED`, 'Urgent alert sent to caregiver station!', true);
+        triggerEmergency('AI Gesture Tracking');
+      } else {
+        showToast(`✋ ${gesture.icon} Sign: "${gesture.name}"`, `Spoken: "${gesture.phrase}"`);
+        try {
+          await fetch(`${API_BASE}/requests`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: gesture.phrase,
+              category: gesture.category,
+              input_method: 'AI Gesture Tracking',
+              priority: gesture.priority,
+              room_number: 'Room 101',
+              patient_id: 'Patient 1'
+            })
+          });
+        } catch (e) {
+          console.error("Error dispatching gesture:", e);
+        }
+      }
     }
 
     // --- WebSocket Live Connection ---
@@ -458,13 +882,9 @@
     }
 
     async function handleCardClick(title, phrase, category, priority) {
-      // 1. Text to Speech
       speakText(phrase);
-
-      // 2. Visual Toast
       showToast(`Speaking: "${title}"`, 'Sent message to caregiver queue');
 
-      // 3. Send to Backend
       try {
         await fetch(`${API_BASE}/requests`, {
           method: 'POST',
@@ -483,7 +903,7 @@
       }
     }
 
-    async function triggerEmergency() {
+    async function triggerEmergency(inputMethod = 'Emergency Button') {
       speakText('Emergency assistance requested immediately!');
       playAlertSound();
       showToast('🚨 SOS ALERT SENT', 'Medical staff notified with urgent priority!', true);
@@ -494,7 +914,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: 'EMERGENCY NURSE CALL',
-            input_method: 'Emergency Button',
+            input_method: inputMethod,
             room_number: 'Room 101',
             patient_id: 'Patient 1'
           })
@@ -536,6 +956,7 @@
         const reqId = req._id || req.id;
         const isUrgent = req.priority === 'urgent' || req.category === 'Emergency';
         const isCompleted = (req.status || 'Pending') === 'Completed' || req.status === 'Resolved';
+        const isGesture = req.input_method && req.input_method.includes('Gesture');
         const formattedTime = req.created_at ? new Date(req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
 
         return `
@@ -548,6 +969,7 @@
                 <span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold ${isUrgent ? 'bg-red-500 text-white' : 'bg-teal-500/10 text-teal-400'}">
                   ${req.category || 'General'}
                 </span>
+                ${isGesture ? '<span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">✋ AI Vision Gesture</span>' : ''}
                 <span class="text-xs text-slate-400 flex items-center gap-1">
                   <i data-lucide="clock" class="w-3 h-3"></i> ${formattedTime}
                 </span>
@@ -605,7 +1027,6 @@
       const nurse = document.getElementById('caregiver-name').value || 'Nurse Station';
       const notes = document.getElementById('caregiver-notes').value || 'Assistance provided';
 
-      // 1. Optimistic UI update
       allRequests = allRequests.map(r => {
         const rId = r._id || r.id;
         return rId === resolvingRequestId ? { ...r, status: 'Completed', notes: notes, resolved_by: nurse } : r;
@@ -615,7 +1036,6 @@
       closeResolveModal();
       showToast('Request Marked Resolved', 'Saved to MongoDB database');
 
-      // 2. Call Backend API
       try {
         await fetch(`${API_BASE}/requests/${resolvingRequestId}`, {
           method: 'PATCH',
@@ -642,7 +1062,6 @@
         document.getElementById('stat-completed').innerText = data.completed_requests || 0;
         document.getElementById('stat-urgent').innerText = data.urgent_requests || 0;
 
-        // Render Category bars
         const catBox = document.getElementById('category-bars');
         const catEntries = Object.entries(data.category_breakdown || {});
         if (!catEntries.length) {
@@ -661,7 +1080,6 @@
             </div>`).join('');
         }
 
-        // Render Priority bars
         const prioBox = document.getElementById('priority-bars');
         const prioEntries = Object.entries(data.priority_breakdown || {});
         if (!prioEntries.length) {
