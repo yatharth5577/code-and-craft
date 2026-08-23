@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from bson import ObjectId
 import json
@@ -14,7 +14,7 @@ load_dotenv()
 app = FastAPI(
     title="AssistFlow Backend",
     description="Backend API for AssistFlow AAC & Caregiver Assistance System",
-    version="1.1.0"
+    version="1.2.0"
 )
 
 app.add_middleware(
@@ -103,8 +103,8 @@ class EmergencyEvent(BaseModel):
     room_number: Optional[str] = "Room 101"
 
 class StatusUpdate(BaseModel):
-    status: str
-    resolved_by: Optional[str] = None
+    status: str = "Completed"
+    resolved_by: Optional[str] = "Caregiver"
     notes: Optional[str] = None
 
 class PatientProfile(BaseModel):
@@ -120,22 +120,26 @@ class PatientProfile(BaseModel):
 async def root():
     return {
         "status": "backend is running",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "active_ws_clients": len(manager.active_connections)
     }
 
 @app.get("/ping-db")
 async def ping_db():
-    await db.command("ping")
-    return {"mongo": "connected"}
+    try:
+        await db.command("ping")
+        return {"mongo": "connected"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database connection error: {str(e)}")
 
-# --- Phrase Cards Endpoints (Full CRUD) ---
+# --- Phrase Cards Endpoints ---
 @app.get("/cards")
 async def get_cards(category: Optional[str] = None):
     query = {"category": category} if category else {}
     cards = []
     async for card in cards_collection.find(query):
         card["_id"] = str(card["_id"])
+        card["id"] = str(card["_id"])
         cards.append(card)
     return cards
 
@@ -144,6 +148,7 @@ async def create_card(card: Card):
     result = await cards_collection.insert_one(card.model_dump())
     new_card = card.model_dump()
     new_card["_id"] = str(result.inserted_id)
+    new_card["id"] = str(result.inserted_id)
     await manager.broadcast("card_created", new_card)
     return {"id": str(result.inserted_id)}
 
@@ -204,7 +209,7 @@ async def create_request(req: RequestEvent):
         "created_at": created_at.isoformat()
     }
     await manager.broadcast("new_request", broadcast_doc)
-    return {"id": str(result.inserted_id)}
+    return {"id": str(result.inserted_id), "_id": str(result.inserted_id)}
 
 @app.post("/requests/emergency")
 async def create_emergency_request(req: EmergencyEvent = EmergencyEvent()):
@@ -234,7 +239,7 @@ async def create_emergency_request(req: EmergencyEvent = EmergencyEvent()):
         "created_at": created_at.isoformat()
     }
     await manager.broadcast("emergency_alert", broadcast_doc)
-    return {"id": str(result.inserted_id), "priority": "urgent"}
+    return {"id": str(result.inserted_id), "_id": str(result.inserted_id), "priority": "urgent"}
 
 @app.get("/requests")
 async def get_requests(
@@ -243,14 +248,17 @@ async def get_requests(
     limit: int = Query(default=50, le=200)
 ):
     query = {}
-    if status:
+    if status and status.lower() != "all":
         query["status"] = status
-    if priority:
+    if priority and priority.lower() != "all":
         query["priority"] = priority
     
     results = []
-    async for r in requests_collection.find(query).sort("created_at", -1).to_list(limit):
+    # Use await .to_list() on the cursor
+    raw_docs = await requests_collection.find(query).sort("created_at", -1).to_list(limit)
+    for r in raw_docs:
         r["_id"] = str(r["_id"])
+        r["id"] = str(r["_id"])
         if isinstance(r.get("created_at"), datetime):
             r["created_at"] = r["created_at"].isoformat()
         if isinstance(r.get("resolved_at"), datetime):
@@ -258,15 +266,18 @@ async def get_requests(
         results.append(r)
     return results
 
+# Support both PATCH and PUT so frontend resolve button always works
 @app.patch("/requests/{request_id}")
+@app.put("/requests/{request_id}")
 async def update_request_status(request_id: str, update: StatusUpdate):
     try:
         oid = ObjectId(request_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid request ID format")
     
-    update_fields = {"status": update.status}
-    if update.status in ["Completed", "Resolved", "Dismissed"]:
+    status_val = update.status or "Completed"
+    update_fields = {"status": status_val}
+    if status_val.lower() in ["completed", "resolved", "dismissed"]:
         update_fields["resolved_at"] = datetime.utcnow()
     if update.resolved_by:
         update_fields["resolved_by"] = update.resolved_by
@@ -282,14 +293,18 @@ async def update_request_status(request_id: str, update: StatusUpdate):
     
     await manager.broadcast("request_status_updated", {
         "id": request_id,
-        "status": update.status,
-        "details": update_fields
+        "_id": request_id,
+        "status": status_val,
+        "details": {
+            "status": status_val,
+            "resolved_by": update.resolved_by,
+            "notes": update.notes
+        }
     })
-    return {"updated": True}
+    return {"updated": True, "id": request_id, "status": status_val}
 
 @app.delete("/requests/all-dev-clear")
 async def clear_all_requests():
-    """Helper endpoint to reset test requests during development"""
     result = await requests_collection.delete_many({})
     await manager.broadcast("all_requests_cleared", {"deleted_count": result.deleted_count})
     return {"deleted_count": result.deleted_count}
@@ -307,14 +322,14 @@ async def get_analytics_stats():
         {"$sort": {"count": -1}}
     ]
     category_stats = await requests_collection.aggregate(category_pipeline).to_list(20)
-    category_breakdown = {item["_id"]: item["count"] for item in category_stats if item["_id"]}
+    category_breakdown = {item["_id"]: item["count"] for item in category_stats if item.get("_id")}
 
     priority_pipeline = [
         {"$group": {"_id": "$priority", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}}
     ]
     priority_stats = await requests_collection.aggregate(priority_pipeline).to_list(10)
-    priority_breakdown = {item["_id"]: item["count"] for item in priority_stats if item["_id"]}
+    priority_breakdown = {item["_id"]: item["count"] for item in priority_stats if item.get("_id")}
 
     return {
         "total_requests": total_requests,
@@ -331,10 +346,11 @@ async def get_profiles():
     profiles = []
     async for p in profiles_collection.find():
         p["_id"] = str(p["_id"])
+        p["id"] = str(p["_id"])
         profiles.append(p)
     return profiles
 
 @app.post("/profiles")
 async def create_profile(profile: PatientProfile):
     result = await profiles_collection.insert_one(profile.model_dump())
-    return {"id": str(result.inserted_id)}
+    return {"id": str(result.inserted_id), "_id": str(result.inserted_id)}
