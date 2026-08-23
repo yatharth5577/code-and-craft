@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -30,6 +32,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve Frontend Static Directory
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 client = AsyncIOMotorClient(os.getenv("MONGO_URI"))
 db = client[os.getenv("DB_NAME", "assist_flow")]
@@ -115,8 +121,14 @@ class PatientProfile(BaseModel):
     dwell_time_seconds: Optional[float] = 1.5
     emergency_contact: Optional[str] = None
 
-# --- System & Health Endpoints ---
-@app.get("/")
+# --- Web Frontend & Health Endpoints ---
+@app.get("/", response_class=HTMLResponse)
+async def serve_home():
+    if os.path.exists("static/index.html"):
+        return FileResponse("static/index.html")
+    return {"status": "backend is running", "version": "1.2.0"}
+
+@app.get("/api/status")
 async def root():
     return {
         "status": "backend is running",
@@ -150,7 +162,7 @@ async def create_card(card: Card):
     new_card["_id"] = str(result.inserted_id)
     new_card["id"] = str(result.inserted_id)
     await manager.broadcast("card_created", new_card)
-    return {"id": str(result.inserted_id)}
+    return {"id": str(result.inserted_id), "_id": str(result.inserted_id)}
 
 @app.put("/cards/{card_id}")
 async def update_card(card_id: str, card_update: CardUpdate):
@@ -254,7 +266,6 @@ async def get_requests(
         query["priority"] = priority
     
     results = []
-    # Use await .to_list() on the cursor
     raw_docs = await requests_collection.find(query).sort("created_at", -1).to_list(limit)
     for r in raw_docs:
         r["_id"] = str(r["_id"])
@@ -266,7 +277,6 @@ async def get_requests(
         results.append(r)
     return results
 
-# Support both PATCH and PUT so frontend resolve button always works
 @app.patch("/requests/{request_id}")
 @app.put("/requests/{request_id}")
 async def update_request_status(request_id: str, update: StatusUpdate):
